@@ -37,6 +37,26 @@ class AudiobookModel:
         self.current_s2s_speaker_id = None
         self.current_s2s_parameters = None
         self.s2s_engine = None
+
+    def save_playback_state(self, state):
+        """Saves the playback state to a JSON file."""
+        if not os.path.exists('configs'):
+            os.makedirs('configs')
+        filepath = os.path.join('configs', 'playback_state.json')
+        with open(filepath, 'w') as f:
+            json.dump(state, f, indent=4)
+
+    def load_playback_state(self):
+        """Loads the playback state from a JSON file."""
+        filepath = os.path.join('configs', 'playback_state.json')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                try:
+                    return json.load(f)
+                except json.JSONDecodeError:
+                    return None
+        return None
+
     def assign_speaker_to_sentence(self, idx, speaker_id):
         idx_str = str(idx)
         if idx_str in self.text_audio_map:

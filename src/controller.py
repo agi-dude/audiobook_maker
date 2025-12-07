@@ -145,6 +145,7 @@ class AudiobookController:
         self.populate_initial_data()
 
         self.view.show()
+        self.load_playback_state()
         sys.exit(self.app.exec())
 
     def allow_speaker_assignment(self, position):
@@ -239,6 +240,7 @@ class AudiobookController:
         self.view.regenerate_bulk_requested.connect(self.regenerate_in_bulk)
         self.view.search_sentences_requested.connect(self.search_sentences)
         self.view.sentence_speaker_changed.connect(self.assign_speaker_to_sentence)
+        self.view.save_playback_state_requested.connect(self.save_playback_state)
         self.view.set_background_clear_image_requested.connect(self.clear_background_image)
         self.view.set_background_image_requested.connect(self.set_background_image)
         self.view.s2s_engine_changed.connect(self.on_s2s_engine_changed)
@@ -394,11 +396,23 @@ class AudiobookController:
             text += additional_text
         return text.lower()
 
-    def load_existing_audiobook(self):
-        if not self.check_and_reset_for_new_text_file('Load Existing Audiobook'):
-            return
+    def load_playback_state(self):
+        state = self.model.load_playback_state()
+        if state:
+            audio_path = state.get('current_audio_path')
+            position = state.get('position')
+            self.current_audiobook_directory = state.get('current_audiobook_directory')
+
+            if self.current_audiobook_directory:
+                self.load_existing_audiobook(self.current_audiobook_directory)
+                self.view.restore_playback_state(audio_path, position)
+
+    def load_existing_audiobook(self, directory_path=None):
+        if directory_path is None:
+            if not self.check_and_reset_for_new_text_file('Load Existing Audiobook'):
+                return
+            directory_path = self.view.get_existing_directory("Select an Audiobook Directory")
         
-        directory_path = self.view.get_existing_directory("Select an Audiobook Directory")
         self.current_audiobook_directory = directory_path 
 
         if not directory_path:
@@ -652,6 +666,15 @@ class AudiobookController:
             self.model.save_generation_settings(self.current_audiobook_directory, self.model.speakers)
         else:
             self.model.save_temp_generation_settings(self.model.speakers)
+
+    def save_playback_state(self, audio_path, position):
+        state = {
+            'current_audio_path': audio_path,
+            'position': position,
+            'current_audiobook_directory': self.current_audiobook_directory
+        }
+        self.model.save_playback_state(state)
+
     def save_list(self):
         list_name = self.view.word_replacer_window.get_current_list_name()
         save_location = os.path.join(self.current_audiobook_directory, list_name)

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QSpinBox, QSplitter, QDialog, QListWidget, QListWidgetItem, QColorDialog, QMenu, QAbstractItemView, QStyledItemDelegate, QPlainTextEdit
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PySide6.QtCore import Signal, Qt, QUrl, QSize
+from PySide6.QtCore import Signal, Qt, QUrl, QSize, QTimer
 from PySide6.QtGui import QPixmap, QAction, QScreen, QTextOption
 
 import os
@@ -655,6 +655,7 @@ class AudiobookMakerView(QMainWindow):
     regenerate_bulk_requested = Signal()
     search_sentences_requested = Signal(int, bool, str, bool)
     sentence_speaker_changed = Signal(int, int)
+    save_playback_state_requested = Signal(str, int)
     set_background_clear_image_requested = Signal()
     set_background_image_requested = Signal()
     s2s_engine_changed = Signal(str)
@@ -700,10 +701,17 @@ class AudiobookMakerView(QMainWindow):
         self.audio_paths = []
         self.indices = []
         self.media_player.mediaStatusChanged.connect(self.on_audio_finished)
+        self.media_player.positionChanged.connect(self.on_position_changed)
         self.current_audio_path = None  # Track the current audio file being played
+        self.current_position = 0
         self.word_replacer_window = None
         
         self.speakers_updated.connect(self.update_speaker_selection_combo)
+
+        # Timer for saving playback state
+        self.save_state_timer = QTimer(self)
+        self.save_state_timer.timeout.connect(self.on_save_state_timer)
+        self.save_state_timer.start(15000)  # 15 seconds
 
 
         self.tts_config = self.load_tts_config('configs/tts_config.json')
@@ -1636,6 +1644,14 @@ class AudiobookMakerView(QMainWindow):
         # self.speakers_updated.emit(self.speakers)
     def on_update_audiobook_triggered(self):
         self.update_audiobook_requested.emit()
+
+    def on_position_changed(self, position):
+        self.current_position = position
+
+    def on_save_state_timer(self):
+        if self.current_audio_path and self.media_player.playbackState() != QMediaPlayer.StoppedState:
+            self.save_playback_state_requested.emit(self.current_audio_path, self.current_position)
+
     def on_upload_voice_triggered(self):
         self.upload_voice_window_requested.emit()
 
@@ -1707,6 +1723,14 @@ class AudiobookMakerView(QMainWindow):
     def resize_table(self):
         self.tableWidget.resizeRowsToContents()
     
+    def restore_playback_state(self, audio_path, position):
+        if audio_path and os.path.exists(audio_path):
+            self.initialize_media_player()
+            self.media_player.setSource(QUrl.fromLocalFile(audio_path))
+            self.media_player.setPosition(position)
+            self.current_audio_path = audio_path
+            self.media_player.pause()
+
     def select_table_row(self, row):
         self.tableWidget.selectRow(row)
     def set_audiobook_label(self, text):
